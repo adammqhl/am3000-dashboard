@@ -1,252 +1,118 @@
-<script>
-  let isEditMode = false;
-  const correctPassword = "AM3000";
-  let currentCapacityData = {}; 
-  let globalProductionQueue = []; 
-  let selectedDays = new Set(); 
-  let arrowConnections = [];
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WE-OD Dashboard</title>
+<style>
+/* --- Base & Table Styles --- */
+body { font-family: Arial, sans-serif; padding: 20px; background-color: #ffffff; color: #333; }
+h2 { font-weight: 800; font-size: 80px; text-align: center; margin:0 0 20px 0; letter-spacing: 5px; }
+.table-container { position: relative; margin-bottom: 50px; }
+table { width: 100%; border-collapse: collapse; table-layout: fixed; box-shadow: 0 2px 5px rgba(0,0,0,0.1); background:#fff; }
+th, td { border:1px solid #ccc; padding:5px 3px; text-align:center; font-size:10px; white-space:nowrap; height:25px; font-weight:bold; }
+th { background:#f8f8f8; }
+tr.non-production-row td { background:#eef4ff; color:#8899aa; }
+.data-cell { background:#fff; font-weight:bold; position:relative; z-index:2; }
+#arrow-overlay { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+.connection-path { stroke: rgba(220,53,69,0.6); stroke-width:2; fill:none; }
+/* --- Edit / Password --- */
+#edit-toggle-btn { display:block; margin:-10px auto 20px auto; padding:8px 16px; font-weight:bold; color:#fff; background:#007bff; border:none; border-radius:5px; cursor:pointer; }
+#edit-toggle-btn.locked { background:#dc3545; }
+#password-prompt { display:none; margin:20px auto; padding:15px; background:#f0f0f0; border:1px solid #ccc; width:300px; text-align:center; }
+#editing-panel-container { display:none; margin-top:30px; opacity:0; transform:translateY(20px); transition:all 0.3s; }
+#editing-panel-container.visible { display:block; opacity:1; transform:translateY(0); }
+/* ...keep other styles from your code... */
+</style>
+</head>
+<body>
 
-  const modelVariantMapping = {
-    hrv: [ { name: "S", index: 0 }, { name: "E", index: 1 }, { name: "V", index: 2 }, { name: "HEV", index: 3 } ],
-    wrv: [ { name: "LESS", index: 4 }, { name: "E", index: 5 }, { name: "V", index: 6 }, { name: "RS", index: 7 } ],
-    city4d: [ { name: "S", index: 8 }, { name: "E", index: 9 }, { name: "V", index: 10 }, { name: "RS", index: 11 }, { name: "HEV", index: 12 } ],
-    city5d: [ { name: "S", index: 13 }, { name: "E", index: 14 }, { name: "V", index: 15 }, { name: "RS", index: 16 }, { name: "HEV", index: 17 } ]
-  };
+<h2>WE-OD</h2>
+<hr>
+<button id="edit-toggle-btn">Unlock Editing</button>
 
-  function initializeMonthData(month, year) {
-    currentCapacityData = {};
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const dayOfWeek = date.getDay();
-      let dCap = 0, nCap = 0, total = 0, ot = "0";
-      if (dayOfWeek >= 1 && dayOfWeek <= 4) { dCap = 99; nCap = 97; total = 196; } 
-      else if (dayOfWeek === 5) { dCap = 85; nCap = 97; total = 182; }
-      currentCapacityData[day] = { dayCap: dCap, nightCap: nCap, total: total, otLabel: ot };
-    }
-    globalProductionQueue = [];
-    selectedDays.clear();
-    arrowConnections = [];
-    document.getElementById('current-sequence-list').innerHTML = '';
-  }
+<div id="password-prompt">
+  <label>Enter Edit Password:</label>
+  <input type="password" id="password-input" placeholder="Password...">
+  <div id="password-error" style="color:red; margin-top:5px;"></div>
+</div>
 
-  function generateTable(month, year) {
-    const tbody = document.getElementById('production-schedule-body');
-    tbody.innerHTML = '';
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    let allDayRows = '';
-    for (let day = 1; day <= daysInMonth; day++) {
-      const blockNumber = Math.floor((day - 1) / 14);
-      const dayShiftLabel = (blockNumber % 2 === 0) ? "A" : "B";
-      const nightShiftLabel = (blockNumber % 2 === 0) ? "B" : "A";
-      const dayData = currentCapacityData[day] || { dayCap: 0, nightCap: 0, total: 0, otLabel: "0" };
-      const dayStr = new Date(year, month, day).toLocaleDateString('en-US', { weekday: 'short' });
-      allDayRows += createRowHTML(day, dayStr, "day", dayShiftLabel, dayData.total, dayData.otLabel, dayData.dayCap);
-      allDayRows += createRowHTML(day, dayStr, "night", nightShiftLabel, dayData.total, dayData.otLabel, dayData.nightCap);
-    }
-    tbody.innerHTML = allDayRows;
-    const monthShortName = new Date(year, month, 1).toLocaleString('default', { month: 'short' });
-    const firstRow = tbody.querySelector('tr[data-day-number="1"]');
-    if(firstRow) firstRow.insertAdjacentHTML('afterbegin', `<td class="month-cell-merged" rowspan="${daysInMonth*2}">${monthShortName} ${year}</td>`);
-  }
-
-  function createRowHTML(dayNum, dayStr, shiftName, shiftLabel, total, ot, cap) {
-    const format = (v) => (v == 0 || v == "0" || v === "") ? "" : v;
-    const variants = '<td class="data-cell"></td>'.repeat(18);
-    const isNonProd = (total === 0);
-    const rowClass = isNonProd ? "non-production-row" : "";
-    return `
-      <tr class="${rowClass}" data-day-number="${dayNum}" data-shift="${shiftName}">
-        ${shiftName === 'day' ? `<td rowspan="2" class="day-number-cell">${dayNum}, ${dayStr}</td><td rowspan="2" class="daily-target-cell">${format(total)}</td><td rowspan="2" class="ot-plan-cell">${format(ot)}</td>` : ''}
-        <td class="shift-label day-night-target-cell">${format(cap)}</td>
-        <td class="shift-label">${shiftLabel}</td>
-        ${variants}
+<div class="table-container">
+  <svg id="arrow-overlay">
+    <defs>
+      <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <polygon points="0 0, 6 3, 0 6" fill="rgba(220,53,69,0.6)"/>
+      </marker>
+    </defs>
+  </svg>
+  
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="3">Month</th>
+        <th rowspan="3">Day</th>
+        <th colspan="4" rowspan="2">Archivement</th>
+        <th colspan="18">Simulation Plan</th>
       </tr>
-    `;
-  }
+      <tr>
+        <th colspan="4" class="hrv">HR-V</th>
+        <th colspan="4" class="wrv">WR-V</th>
+        <th colspan="5" class="city4d">City 4D</th>
+        <th colspan="5" class="city5d">City 5D</th>
+      </tr>
+      <tr>
+        <th>Daily Target</th>
+        <th>OT Plan</th>
+        <th>Plan Day/Night</th>
+        <th>Shift</th>
+        <th class="hrv">S</th> <th class="hrv">E</th> <th class="hrv">V</th> <th class="hrv">HEV</th>
+        <th class="wrv">LESS</th> <th class="wrv">E</th> <th class="wrv">V</th> <th class="wrv">RS</th>
+        <th class="city4d">S</th> <th class="city4d">E</th> <th class="city4d">V</th> <th class="city4d">RS</th> <th class="city4d">HEV</th>
+        <th class="city5d">S</th> <th class="city5d">E</th> <th class="city5d">V</th> <th class="city5d">RS</th> <th class="city5d">HEV</th>
+      </tr>
+    </thead>
+    <tbody id="production-schedule-body"></tbody>
+  </table>
+</div>
 
-  function drawArrowOverlay() {
-    const svg = document.getElementById('arrow-overlay');
-    const defs = svg.innerHTML.split('</defs>')[0] + '</defs>';
-    svg.innerHTML = defs;
-    const tableRect = document.querySelector('table').getBoundingClientRect();
-    arrowConnections.forEach(conn => {
-      if (!conn.from || !conn.to) return;
-      const r1 = conn.from.getBoundingClientRect();
-      const r2 = conn.to.getBoundingClientRect();
-      const startX = r1.left + r1.width / 2 - tableRect.left;
-      const startY = r1.bottom - 2 - tableRect.top;
-      const endX = r2.left + r2.width / 2 - tableRect.left;
-      const endY = r2.top + 2 - tableRect.top;
-      if (Math.abs(endX - startX) < 10 && Math.abs(endY - startY) < 10) return;
-      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-      const controlPointY1 = startY + 15;
-      const controlPointY2 = endY - 15;
-      const d = `M ${startX} ${startY} C ${startX} ${controlPointY1}, ${endX} ${controlPointY2}, ${endX} ${endY}`;
-      path.setAttribute('d', d);
-      path.setAttribute('class', 'connection-path');
-      path.setAttribute('marker-end', 'url(#arrowhead)');
-      svg.appendChild(path);
-    });
-  }
+<div id="editing-panel-container">
+  <!-- Your Step Wizard HTML stays here -->
+</div>
 
-  window.addEventListener('resize', drawArrowOverlay);
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbySCaYNySVZFB4GcPgcXGAQiaWRsqE_Esj93keeqzuvd7BbnojTkkl87r_xtCanf4c7uQ/exec';
+let isEditMode = false;
+const correctPassword = "AM3000";
+let currentCapacityData = {};
+let globalProductionQueue = [];
+let selectedDays = new Set();
+let arrowConnections = [];
 
-  const toggleButton = document.getElementById('edit-toggle-btn');
-  const passwordPrompt = document.getElementById('password-prompt');
-  const passwordInput = document.getElementById('password-input');
-  const editingPanel = document.getElementById('editing-panel-container');
-  const step1 = document.getElementById('step-1-month'), step2 = document.getElementById('step-2-calendar');
-  const step3 = document.getElementById('step-3-targets'), step4 = document.getElementById('step-4-sequence');
-  const abnormalList = document.getElementById('abnormal-days-list');
+// --- FETCH DATA ---
+async function fetchMonthData(month, year) {
+  try {
+    const res = await fetch(`${API_URL}?action=fetch&month=${month}&year=${year}`);
+    const data = await res.json();
+    currentCapacityData = data;
+    generateTable(month, year);
+  } catch (err) { console.error("Fetch failed:", err); }
+}
 
-  toggleButton.addEventListener('click', () => {
-    if (isEditMode) {
-      isEditMode = false; toggleButton.textContent = 'Unlock Editing';
-      toggleButton.classList.remove('locked'); editingPanel.classList.remove('visible');
-    } else {
-      passwordPrompt.style.display = 'block'; passwordInput.focus();
-    }
-  });
+// --- SAVE DATA ---
+async function saveTargetsToSheet() {
+  const payload = { action: "update", data: currentCapacityData };
+  try {
+    const res = await fetch(API_URL, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload) });
+    const result = await res.json();
+    alert(result.message || "Saved successfully!");
+  } catch(err) { console.error(err); alert("Error saving data!"); }
+}
 
-  passwordInput.addEventListener('keypress', function(e) {
-    if (e.key === 'Enter') {
-      if (passwordInput.value === correctPassword) {
-        isEditMode = true; toggleButton.textContent = 'Lock Dashboard';
-        toggleButton.classList.add('locked'); passwordPrompt.style.display = 'none';
-        passwordInput.value = ''; editingPanel.classList.add('visible'); showStep(step1);
-      } else { document.getElementById('password-error').textContent = 'Wrong Password'; }
-    }
-  });
+// --- Include all your other JS functions from previous code ---
+// initializeMonthData, generateTable, drawArrowOverlay, calendar, sequences, etc.
 
-  function showStep(el) { document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active')); el.classList.add('active'); }
-
-  document.getElementById('btn-to-step-2').addEventListener('click', () => {
-    const m = parseInt(document.getElementById('plan-month').value), y = parseInt(document.getElementById('plan-year').value);
-    initializeMonthData(m, y); generateTable(m, y); generateCalendar(m, y); showStep(step2);
-  });
-
-  document.getElementById('btn-back-to-step-1').addEventListener('click', () => showStep(step1));
-
-  document.getElementById('btn-to-step-3').addEventListener('click', () => {
-    abnormalList.innerHTML = '';
-    if (selectedDays.size === 0) abnormalList.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">No abnormal days selected.</div>';
-    else {
-      Array.from(selectedDays).sort((a, b) => a - b).forEach(day => {
-        const data = currentCapacityData[day];
-        const div = document.createElement('div'); div.className = 'abnormal-day-row'; div.dataset.day = day;
-        div.innerHTML = `
-          <div style="color:#007bff;">Day ${day}</div>
-          <div><select class="ab-type"><option value="work">Work</option><option value="holiday">Holiday</option></select></div>
-          <div><input type="number" class="ab-total" value="${data.total}"></div>
-          <div><input type="number" class="ab-day" value="${data.dayCap}"></div>
-          <div><input type="number" class="ab-night" value="${data.nightCap}"></div>
-          <div><input type="text" class="ab-ot" value="${data.otLabel}" placeholder="Label"></div>
-        `;
-        abnormalList.appendChild(div);
-        div.querySelector('.ab-type').addEventListener('change', function() {
-          const inputs = div.querySelectorAll('input:not(.ab-ot)');
-          if (this.value === 'holiday') { inputs.forEach(i=>{i.value=0;i.disabled=true;}); div.querySelector('.ab-ot').value="PH"; }
-          else { inputs.forEach(i=>i.disabled=false); div.querySelector('.ab-ot').value=""; }
-        });
-      });
-    }
-    showStep(step3);
-  });
-
-  document.getElementById('save-targets-btn').addEventListener('click', () => {
-    abnormalList.querySelectorAll('.abnormal-day-row').forEach(row => {
-      const day = parseInt(row.dataset.day);
-      currentCapacityData[day].total = parseInt(row.querySelector('.ab-total').value)||0;
-      currentCapacityData[day].dayCap = parseInt(row.querySelector('.ab-day').value)||0;
-      currentCapacityData[day].nightCap = parseInt(row.querySelector('.ab-night').value)||0;
-      currentCapacityData[day].otLabel = row.querySelector('.ab-ot').value;
-      const cell = document.querySelector(`.calendar-day[data-day="${day}"]`);
-      if(cell) cell.classList.add('abnormal-set');
-    });
-    const m = parseInt(document.getElementById('plan-month').value), y = parseInt(document.getElementById('plan-year').value);
-    generateTable(m, y);
-    generateCalendar(m, y); 
-    selectedDays.forEach(d => {
-       const c = document.querySelector(`.calendar-day[data-day="${d}"]`);
-       if(c) { c.classList.add('selected'); c.classList.add('abnormal-set'); }
-    });
-    showStep(step4);
-  });
-
-  document.getElementById('btn-back-to-step-2').addEventListener('click', () => showStep(step2));
-  document.getElementById('btn-back-to-step-3').addEventListener('click', () => showStep(step3));
-
-  function generateCalendar(month, year) {
-    const grid = document.getElementById('calendar-grid'); grid.innerHTML = '';
-    const days = new Date(year, month + 1, 0).getDate(), start = new Date(year, month, 1).getDay();
-    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => grid.innerHTML+=`<div style="text-align:center;font-weight:bold;background:#f0f0f0;">${d}</div>`);
-    for(let i=0; i<start; i++) grid.innerHTML+=`<div></div>`;
-    for(let d=1; d<=days; d++) grid.innerHTML+=`<div class="calendar-day" data-day="${d}">${d}</div>`;
-    grid.querySelectorAll('.calendar-day').forEach(c => c.addEventListener('click', () => {
-      const d = parseInt(c.dataset.day);
-      if(selectedDays.has(d)) { selectedDays.delete(d); c.classList.remove('selected'); }
-      else { selectedDays.add(d); c.classList.add('selected'); }
-    }));
-  }
-
-  const seqModel = document.getElementById('seq-model'), seqVariant = document.getElementById('seq-variant');
-  seqModel.addEventListener('change', updateVar);
-  function updateVar() {
-    seqVariant.innerHTML = '';
-    modelVariantMapping[seqModel.value].forEach(v => seqVariant.innerHTML+=`<option value="${v.name}" data-index="${v.index}">${v.name}</option>`);
-  }
-  updateVar();
-
-  document.getElementById('add-sequence-btn').onclick = function() {
-    const m = seqModel.value, v = seqVariant.value, idx = parseInt(seqVariant.options[seqVariant.selectedIndex].dataset.index);
-    const lots = parseInt(document.getElementById('seq-lots').value), units = lots * 30;
-    if(lots <= 0) return;
-    globalProductionQueue.push({ m, v, idx, units, lots });
-    const div = document.createElement('div'); div.className='sequence-item';
-    div.innerHTML = `<span>${globalProductionQueue.length}. <strong>${lots} Lots</strong> (${units}u) ${m.toUpperCase()}-${v}</span><span class="sequence-remove">&times;</span>`;
-    div.querySelector('.sequence-remove').onclick = function(){ div.remove(); globalProductionQueue[globalProductionQueue.length-1].units=0; };
-    document.getElementById('current-sequence-list').appendChild(div);
-  };
-
-  document.getElementById('generate-schedule-btn').onclick = function() {
-    const m = parseInt(document.getElementById('plan-month').value), y = parseInt(document.getElementById('plan-year').value);
-    const days = new Date(y, m + 1, 0).getDate();
-    let queue = JSON.parse(JSON.stringify(globalProductionQueue.filter(i => i.units > 0)));
-    let startOffset = 196;
-    while (startOffset > 0 && queue.length > 0) {
-        if (queue[0].units > startOffset) {
-            queue[0].units -= startOffset;
-            startOffset = 0;
-        } else {
-            startOffset -= queue[0].units;
-            queue.shift();
-        }
-    }
-    let current = queue.shift();
-    arrowConnections = [];
-    for (let d = 1; d <= days; d++) {
-      ['day', 'night'].forEach(shift => {
-        let cap = (shift === 'day') ? currentCapacityData[d].dayCap : currentCapacityData[d].nightCap;
-        const row = document.querySelector(`tr[data-day-number="${d}"][data-shift="${shift}"]`);
-        const cells = row.querySelectorAll('.data-cell');
-        cells.forEach(cell => cell.textContent = '');
-        let lastFilled = null;
-        while (cap > 0 && current) {
-          const take = Math.min(cap, current.units);
-          const targetCell = cells[current.idx]; 
-          if (lastFilled && lastFilled !== targetCell) { arrowConnections.push({ from: lastFilled, to: targetCell }); }
-          targetCell.textContent = parseInt(targetCell.textContent||0) + take;
-          lastFilled = targetCell;
-          cap -= take; current.units -= take;
-          if (current.units <= 0) current = queue.shift();
-        }
-      });
-    }
-    drawArrowOverlay();
-    alert("Schedule Generated!");
-  };
-
-  window.addEventListener('resize', drawArrowOverlay);
-  initializeMonthData(10, 2025); generateTable(10, 2025);
+initializeMonthData(10,2025);
+generateTable(10,2025);
 </script>
+</body>
+</html>
