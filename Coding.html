@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WE-OD Dashboard</title>
+<style>
+  /* --- Base & Table Styles --- */
+  body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background-color: #ffffff;
+    color: #333333;
+  }
+  h2 {
+    font-family: Arial, sans-serif; 
+    font-weight: 800;
+    font-size: 80px; 
+    text-align: center;
+    margin-top: 0;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    color: #000000;
+    text-shadow: none;
+    border-bottom: none;
+    letter-spacing: 5px;
+  }
+  
+  /* Wrapper for Table + SVG Overlay */
+  .table-container {
+    position: relative; /* Anchor for absolute SVG */
+    margin-bottom: 50px;
+  }
+  
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+    background-color: #ffffff;
+  }
+  th, td {
+    border: 1px solid #cccccc;
+    padding: 5px 3px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 10px;
+    white-space: nowrap;
+    height: 25px; 
+    color: #333333;
+    font-weight: bold;
+  }
+  th {
+    background-color: #f8f8f8;
+    font-weight: 800;
+    color: #333333;
+    border-color: #cccccc;
+  }
+  thead tr:nth-child(1) th {
+    background-color: #f0f0f0;
+    color: #333333;
+  }
+  .hrv { background-color: #cce5ff !important; color: #333333 !important; } 
+  .wrv { background-color: #e0e0e0 !important; color: #333333 !important; } 
+  .city4d { background-color: #f8d7da !important; color: #333333 !important; } 
+  .city5d { background-color: #d4edda !important; color: #333333 !important; } 
+  
+  .data-cell {
+    background-color: #ffffff; 
+    color: #333333;
+    font-weight: bold;
+    position: relative;
+    z-index: 2; 
+  }
+  
+  /* Non-Production Row Style */
+  tr.non-production-row td {
+    background-color: #eef4ff; 
+    color: #8899aa; 
+  }
+  tr.non-production-row .day-number-cell, 
+  tr.non-production-row .shift-label {
+    background-color: #dfe8fc; 
+  }
+  
+  /* SVG Overlay Styles */
+  #arrow-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; 
+    z-index: 10;
+  }
+  .connection-path {
+    stroke: rgba(220, 53, 69, 0.6); /* 60% opacity Red */
+    stroke-width: 2; 
+    fill: none;
+  }
+
+  .shift-label { font-weight: bold; text-align: left; padding-left: 5px; background-color: #f9f9f9; }
+  .month-cell-merged { vertical-align: middle; font-weight: bold; font-size: 14px; background-color: #f8f8f8; }
+
+  /* --- Edit Toggle & Password Styles --- */
+  #edit-toggle-btn {
+    display: block; margin: -10px auto 20px auto; padding: 8px 16px;
+    font-weight: bold; color: #fff; background-color: #007bff;
+    border: none; border-radius: 5px; cursor: pointer;
+  }
+  #edit-toggle-btn.locked { background-color: #dc3545; }
+  #password-prompt {
+    display: none; margin: 20px auto; padding: 15px; background: #f0f0f0;
+    border: 1px solid #ccc; width: 300px; text-align: center;
+  }
+  
+  /* --- Wizard Panel Styles --- */
+  #editing-panel-container { display: none; margin-top: 30px; opacity: 0; transform: translateY(20px); transition: all 0.3s; }
+  #editing-panel-container.visible { display: block; opacity: 1; transform: translateY(0); }
+  .edit-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 25px; max-width: 900px; margin: 20px auto; border: 1px solid #ddd; }
+  .wizard-step { display: none; } .wizard-step.active { display: block; animation: fadeIn 0.3s; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  .input-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px; }
+  .input-group label { display: block; font-weight: bold; font-size: 12px; color: #555; margin-bottom: 5px; }
+  .input-group input, .input-group select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+  
+  /* Calendar & Lists */
+  #calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 15px; }
+  .calendar-day { padding: 15px 5px; text-align: center; border: 1px solid #eee; cursor: pointer; user-select: none; }
+  .calendar-day:hover:not(.empty) { background-color: #e6f0ff; border-color: #007bff; }
+  .calendar-day.selected { background-color: #007bff; color: white; }
+  .calendar-day.abnormal-set::after { content: "•"; display: block; color: #dc3545; font-size: 20px; line-height: 10px; }
+  .abnormal-days-list { max-height: 400px; overflow-y: auto; border: 1px solid #eee; margin-bottom: 20px; padding: 10px; background: #f9f9f9; }
+  .abnormal-day-row { display: grid; grid-template-columns: 50px 100px 1fr 1fr 1fr 1fr; gap: 10px; align-items: center; padding: 10px; border-bottom: 1px solid #ddd; background: #fff; }
+  .abnormal-day-row input, .abnormal-day-row select { width: 100%; padding: 5px; box-sizing: border-box; }
+  .sequence-list { border: 1px solid #eee; max-height: 180px; overflow-y: auto; margin-top: 15px; background: #fdfdfd; }
+  .sequence-item { padding: 10px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; background-color: #fff; }
+  .sequence-item:nth-child(even) { background-color: #f9f9f9; }
+  .sequence-remove { color: red; cursor: pointer; font-weight: bold; padding: 0 5px; }
+  
+  .button-row { display: flex; justify-content: space-between; margin-top: 25px; padding-top: 15px; border-top: 1px solid #eee; }
+  .wizard-btn { padding: 10px 25px; font-weight: bold; color: #fff; background-color: #007bff; border: none; border-radius: 5px; cursor: pointer; }
+  .wizard-btn.secondary { background-color: #6c757d; }
+  .wizard-btn.add { background-color: #17a2b8; width: 100%; margin-top: 10px; }
+  .wizard-btn.save { background-color: #28a745; }
+</style>
+</head>
+<body>
+
+<h2>WE-OD</h2>
+<hr>
+<button id="edit-toggle-btn">Unlock Editing</button>
+
+<div id="password-prompt">
+  <label>Enter Edit Password:</label>
+  <input type="password" id="password-input" placeholder="Password...">
+  <div id="password-error" style="color:red; margin-top:5px;"></div>
+</div>
+
+<div class="table-container">
+  <svg id="arrow-overlay">
+    <defs>
+      <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <polygon points="0 0, 6 3, 0 6" fill="rgba(220, 53, 69, 0.6)" />
+      </marker>
+    </defs>
+  </svg>
+  
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="3">Month</th>
+        <th rowspan="3">Day</th>
+        <!-- Archivement spans 4: Daily, OT, Plan D/N, Shift -->
+        <th colspan="4" rowspan="2">Archivement</th> 
+        <!-- Simulation Plan -->
+        <th colspan="18">Simulation Plan</th> 
+      </tr>
+      <tr>
+        <th colspan="4" class="hrv">HR-V</th> 
+        <th colspan="4" class="wrv">WR-V</th> 
+        <th colspan="5" class="city4d">City 4D</th> 
+        <th colspan="5" class="city5d">City 5D</th> 
+      </tr>
+      <tr>
+        <th>Daily Target</th>
+        <th>OT Plan</th>
+        <th>Plan Day/Night</th>
+        <th>Shift</th> <!-- Shift moved here -->
+        <th class="hrv">S</th> <th class="hrv">E</th> <th class="hrv">V</th> <th class="hrv">HEV</th>
+        <th class="wrv">LESS</th> <th class="wrv">E</th> <th class="wrv">V</th> <th class="wrv">RS</th>
+        <th class="city4d">S</th> <th class="city4d">E</th> <th class="city4d">V</th> <th class="city4d">RS</th> <th class="city4d">HEV</th>
+        <th class="city5d">S</th> <th class="city5d">E</th> <th class="city5d">V</th> <th class="city5d">RS</th> <th class="city5d">HEV</th>
+      </tr>
+    </thead>
+    <tbody id="production-schedule-body">
+      <!-- Rows Generated by JS -->
+    </tbody>
+  </table>
+</div>
+
+<div id="editing-panel-container">
+  <div class="edit-card">
+    
+    <!-- Step 1 -->
+    <div id="step-1-month" class="wizard-step active">
+      <h3 style="text-align:center; color:#007bff;">Step 1: Select Planning Month</h3>
+      <div class="input-grid">
+        <div class="input-group">
+          <label>Month</label>
+          <select id="plan-month">
+            <option value="0">January</option><option value="1">February</option><option value="2">March</option>
+            <option value="3">April</option><option value="4">May</option><option value="5">June</option>
+            <option value="6">July</option><option value="7">August</option><option value="8">September</option>
+            <option value="9">October</option><option value="10" selected>November</option><option value="11">December</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Year</label>
+          <input type="number" id="plan-year" value="2025">
+        </div>
+      </div>
+      <div class="button-row" style="justify-content: flex-end;">
+        <button id="btn-to-step-2" class="wizard-btn">Next: Select Abnormal Days</button>
+      </div>
+    </div>
+    
+    <!-- Step 2 -->
+    <div id="step-2-calendar" class="wizard-step">
+      <h3 style="text-align:center; color:#007bff;">Step 2: Select Abnormal Days</h3>
+      <div id="calendar-grid"></div>
+      <div class="button-row">
+        <button id="btn-back-to-step-1" class="wizard-btn secondary">Back</button>
+        <button id="btn-to-step-3" class="wizard-btn">Next: Set Targets</button>
+      </div>
+    </div>
+    
+    <!-- Step 3 -->
+    <div id="step-3-targets" class="wizard-step">
+      <h3 style="text-align:center; color:#007bff;">Step 3: Set Targets</h3>
+      <div style="display: grid; grid-template-columns: 50px 100px 1fr 1fr 1fr 1fr; gap: 10px; padding: 0 10px; font-weight: bold; font-size: 12px;">
+        <div>Day</div><div>Type</div><div>Total</div><div>Day</div><div>Night</div><div>Label</div>
+      </div>
+      <div id="abnormal-days-list" class="abnormal-days-list"></div>
+      <div class="button-row">
+        <button id="btn-back-to-step-2" class="wizard-btn secondary">Back</button>
+        <button id="save-targets-btn" class="wizard-btn" style="background-color:#6f42c1;">Save & Next</button>
+      </div>
+    </div>
+    
+    <!-- Step 4 -->
+    <div id="step-4-sequence" class="wizard-step">
+      <h3 style="text-align:center; color:#007bff;">Step 4: Production Sequence (FIFO)</h3>
+      <div class="input-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+        <div class="input-group">
+          <label>Model</label>
+          <select id="seq-model">
+            <option value="hrv">HR-V</option><option value="wrv">WR-V</option>
+            <option value="city4d">City 4D</option><option value="city5d">City 5D</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Variant</label>
+          <select id="seq-variant"></select>
+        </div>
+        <div class="input-group">
+          <label>Lots</label>
+          <input type="number" id="seq-lots" value="0" min="1" placeholder="Lots">
+        </div>
+      </div>
+      <button id="add-sequence-btn" class="wizard-btn add">Add to Queue</button>
+      <div class="sequence-list" id="current-sequence-list"></div>
+      <div class="button-row">
+        <button id="btn-back-to-step-3" class="wizard-btn secondary">Back</button>
+        <button id="generate-schedule-btn" class="wizard-btn save">Generate & Save Schedule</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  let isEditMode = false;
+  const correctPassword = "AM3000";
+  let currentCapacityData = {}; 
+  let globalProductionQueue = []; 
+  let selectedDays = new Set(); 
+  let arrowConnections = [];
+
+  const modelVariantMapping = {
+    hrv: [ { name: "S", index: 0 }, { name: "E", index: 1 }, { name: "V", index: 2 }, { name: "HEV", index: 3 } ],
+    wrv: [ { name: "LESS", index: 4 }, { name: "E", index: 5 }, { name: "V", index: 6 }, { name: "RS", index: 7 } ],
+    city4d: [ { name: "S", index: 8 }, { name: "E", index: 9 }, { name: "V", index: 10 }, { name: "RS", index: 11 }, { name: "HEV", index: 12 } ],
+    city5d: [ { name: "S", index: 13 }, { name: "E", index: 14 }, { name: "V", index: 15 }, { name: "RS", index: 16 }, { name: "HEV", index: 17 } ]
+  };
+  
+  function initializeMonthData(month, year) {
+    currentCapacityData = {};
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, month, day);
+      const dayOfWeek = date.getDay();
+      let dCap = 0, nCap = 0, total = 0, ot = "0";
+      if (dayOfWeek >= 1 && dayOfWeek <= 4) { dCap = 99; nCap = 97; total = 196; } 
+      else if (dayOfWeek === 5) { dCap = 85; nCap = 97; total = 182; }
+      currentCapacityData[day] = { dayCap: dCap, nightCap: nCap, total: total, otLabel: ot };
+    }
+    globalProductionQueue = [];
+    selectedDays.clear();
+    arrowConnections = [];
+    document.getElementById('current-sequence-list').innerHTML = '';
+  }
+
+  function generateTable(month, year) {
+    const tbody = document.getElementById('production-schedule-body');
+    tbody.innerHTML = ''; 
+    
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    let allDayRows = '';
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+      const blockNumber = Math.floor((day - 1) / 14);
+      const dayShiftLabel = (blockNumber % 2 === 0) ? "A" : "B";
+      const nightShiftLabel = (blockNumber % 2 === 0) ? "B" : "A";
+      const dayData = currentCapacityData[day] || { dayCap: 0, nightCap: 0, total: 0, otLabel: "0" };
+      const dayStr = new Date(year, month, day).toLocaleDateString('en-US', { weekday: 'short' });
+      
+      allDayRows += createRowHTML(day, dayStr, "day", dayShiftLabel, dayData.total, dayData.otLabel, dayData.dayCap);
+      allDayRows += createRowHTML(day, dayStr, "night", nightShiftLabel, dayData.total, dayData.otLabel, dayData.nightCap);
+    }
+    tbody.innerHTML = allDayRows;
+    
+    const monthShortName = new Date(year, month, 1).toLocaleString('default', { month: 'short' });
+    const firstRow = tbody.querySelector('tr[data-day-number="1"]');
+    if(firstRow) firstRow.insertAdjacentHTML('afterbegin', `<td class="month-cell-merged" rowspan="${daysInMonth*2}">${monthShortName} ${year}</td>`);
+  }
+
+  function createRowHTML(dayNum, dayStr, shiftName, shiftLabel, total, ot, cap) {
+    const format = (v) => (v == 0 || v == "0" || v === "") ? "" : v;
+    const variants = '<td class="data-cell"></td>'.repeat(18); 
+    const isNonProd = (total === 0);
+    const rowClass = isNonProd ? "non-production-row" : "";
+
+    return `
+      <tr class="${rowClass}" data-day-number="${dayNum}" data-shift="${shiftName}">
+        ${shiftName === 'day' ? `<td rowspan="2" class="day-number-cell">${dayNum}, ${dayStr}</td><td rowspan="2" class="daily-target-cell">${format(total)}</td><td rowspan="2" class="ot-plan-cell">${format(ot)}</td>` : ''}
+        <td class="shift-label day-night-target-cell">${format(cap)}</td>
+        <td class="shift-label">${shiftLabel}</td>
+        ${variants}
+      </tr>
+    `;
+  }
+
+  function drawArrowOverlay() {
+    const svg = document.getElementById('arrow-overlay');
+    const defs = svg.innerHTML.split('</defs>')[0] + '</defs>';
+    svg.innerHTML = defs;
+    
+    const tableRect = document.querySelector('table').getBoundingClientRect();
+    
+    arrowConnections.forEach(conn => {
+      if (!conn.from || !conn.to) return;
+      const r1 = conn.from.getBoundingClientRect();
+      const r2 = conn.to.getBoundingClientRect();
+      
+      const startX = r1.left + r1.width / 2 - tableRect.left;
+      const startY = r1.bottom - 2 - tableRect.top;
+      const endX = r2.left + r2.width / 2 - tableRect.left;
+      const endY = r2.top + 2 - tableRect.top; 
+      
+      if (Math.abs(endX - startX) < 10 && Math.abs(endY - startY) < 10) return;
+      
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      
+      // Bezier Curve logic
+      const controlPointY1 = startY + 15;
+      const controlPointY2 = endY - 15;
+      const d = `M ${startX} ${startY} C ${startX} ${controlPointY1}, ${endX} ${controlPointY2}, ${endX} ${endY}`;
+
+      path.setAttribute('d', d);
+      path.setAttribute('class', 'connection-path');
+      path.setAttribute('marker-end', 'url(#arrowhead)');
+      svg.appendChild(path);
+    });
+  }
+  
+  window.addEventListener('resize', drawArrowOverlay);
+
+  const toggleButton = document.getElementById('edit-toggle-btn');
+  const passwordPrompt = document.getElementById('password-prompt');
+  const passwordInput = document.getElementById('password-input');
+  const editingPanel = document.getElementById('editing-panel-container');
+  const step1 = document.getElementById('step-1-month'), step2 = document.getElementById('step-2-calendar');
+  const step3 = document.getElementById('step-3-targets'), step4 = document.getElementById('step-4-sequence');
+  const abnormalList = document.getElementById('abnormal-days-list');
+
+  toggleButton.addEventListener('click', () => {
+    if (isEditMode) {
+      isEditMode = false; toggleButton.textContent = 'Unlock Editing';
+      toggleButton.classList.remove('locked'); editingPanel.classList.remove('visible');
+    } else {
+      passwordPrompt.style.display = 'block'; passwordInput.focus();
+    }
+  });
+
+  passwordInput.addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') {
+      if (passwordInput.value === correctPassword) {
+        isEditMode = true; toggleButton.textContent = 'Lock Dashboard';
+        toggleButton.classList.add('locked'); passwordPrompt.style.display = 'none';
+        passwordInput.value = ''; editingPanel.classList.add('visible'); showStep(step1);
+      } else { document.getElementById('password-error').textContent = 'Wrong Password'; }
+    }
+  });
+
+  function showStep(el) { document.querySelectorAll('.wizard-step').forEach(s => s.classList.remove('active')); el.classList.add('active'); }
+
+  document.getElementById('btn-to-step-2').addEventListener('click', () => {
+    const m = parseInt(document.getElementById('plan-month').value), y = parseInt(document.getElementById('plan-year').value);
+    initializeMonthData(m, y); generateTable(m, y); generateCalendar(m, y); showStep(step2);
+  });
+
+  document.getElementById('btn-back-to-step-1').addEventListener('click', () => showStep(step1));
+
+  document.getElementById('btn-to-step-3').addEventListener('click', () => {
+    abnormalList.innerHTML = '';
+    if (selectedDays.size === 0) abnormalList.innerHTML = '<div style="text-align:center;padding:20px;color:#888;">No abnormal days selected.</div>';
+    else {
+      Array.from(selectedDays).sort((a, b) => a - b).forEach(day => {
+        const data = currentCapacityData[day];
+        const div = document.createElement('div'); div.className = 'abnormal-day-row'; div.dataset.day = day;
+        div.innerHTML = `
+          <div style="color:#007bff;">Day ${day}</div>
+          <div><select class="ab-type"><option value="work">Work</option><option value="holiday">Holiday</option></select></div>
+          <div><input type="number" class="ab-total" value="${data.total}"></div>
+          <div><input type="number" class="ab-day" value="${data.dayCap}"></div>
+          <div><input type="number" class="ab-night" value="${data.nightCap}"></div>
+          <div><input type="text" class="ab-ot" value="${data.otLabel}" placeholder="Label"></div>
+        `;
+        abnormalList.appendChild(div);
+        div.querySelector('.ab-type').addEventListener('change', function() {
+          const inputs = div.querySelectorAll('input:not(.ab-ot)');
+          if (this.value === 'holiday') { inputs.forEach(i=>{i.value=0;i.disabled=true;}); div.querySelector('.ab-ot').value="PH"; }
+          else { inputs.forEach(i=>i.disabled=false); div.querySelector('.ab-ot').value=""; }
+        });
+      });
+    }
+    showStep(step3);
+  });
+
+  document.getElementById('save-targets-btn').addEventListener('click', () => {
+    abnormalList.querySelectorAll('.abnormal-day-row').forEach(row => {
+      const day = parseInt(row.dataset.day);
+      currentCapacityData[day].total = parseInt(row.querySelector('.ab-total').value)||0;
+      currentCapacityData[day].dayCap = parseInt(row.querySelector('.ab-day').value)||0;
+      currentCapacityData[day].nightCap = parseInt(row.querySelector('.ab-night').value)||0;
+      currentCapacityData[day].otLabel = row.querySelector('.ab-ot').value;
+      const cell = document.querySelector(`.calendar-day[data-day="${day}"]`);
+      if(cell) cell.classList.add('abnormal-set');
+    });
+    const m = parseInt(document.getElementById('plan-month').value), y = parseInt(document.getElementById('plan-year').value);
+    generateTable(m, y);
+    generateCalendar(m, y); 
+    selectedDays.forEach(d => {
+       const c = document.querySelector(`.calendar-day[data-day="${d}"]`);
+       if(c) { c.classList.add('selected'); c.classList.add('abnormal-set'); }
+    });
+    showStep(step4);
+  });
+
+  document.getElementById('btn-back-to-step-2').addEventListener('click', () => showStep(step2));
+  document.getElementById('btn-back-to-step-3').addEventListener('click', () => showStep(step3));
+
+  function generateCalendar(month, year) {
+    const grid = document.getElementById('calendar-grid'); grid.innerHTML = '';
+    const days = new Date(year, month + 1, 0).getDate(), start = new Date(year, month, 1).getDay();
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => grid.innerHTML+=`<div style="text-align:center;font-weight:bold;background:#f0f0f0;">${d}</div>`);
+    for(let i=0; i<start; i++) grid.innerHTML+=`<div></div>`;
+    for(let d=1; d<=days; d++) grid.innerHTML+=`<div class="calendar-day" data-day="${d}">${d}</div>`;
+    grid.querySelectorAll('.calendar-day').forEach(c => c.addEventListener('click', () => {
+      const d = parseInt(c.dataset.day);
+      if(selectedDays.has(d)) { selectedDays.delete(d); c.classList.remove('selected'); }
+      else { selectedDays.add(d); c.classList.add('selected'); }
+    }));
+  }
+
+  const seqModel = document.getElementById('seq-model'), seqVariant = document.getElementById('seq-variant');
+  seqModel.addEventListener('change', updateVar);
+  function updateVar() {
+    seqVariant.innerHTML = '';
+    modelVariantMapping[seqModel.value].forEach(v => seqVariant.innerHTML+=`<option value="${v.name}" data-index="${v.index}">${v.name}</option>`);
+  }
+  updateVar();
+
+  document.getElementById('add-sequence-btn').onclick = function() {
+    const m = seqModel.value, v = seqVariant.value, idx = parseInt(seqVariant.options[seqVariant.selectedIndex].dataset.index);
+    const lots = parseInt(document.getElementById('seq-lots').value), units = lots * 30;
+    if(lots <= 0) return;
+    globalProductionQueue.push({ m, v, idx, units, lots });
+    const div = document.createElement('div'); div.className='sequence-item';
+    div.innerHTML = `<span>${globalProductionQueue.length}. <strong>${lots} Lots</strong> (${units}u) ${m.toUpperCase()}-${v}</span><span class="sequence-remove">&times;</span>`;
+    div.querySelector('.sequence-remove').onclick = function(){ div.remove(); globalProductionQueue[globalProductionQueue.length-1].units=0; };
+    document.getElementById('current-sequence-list').appendChild(div);
+  };
+
+  document.getElementById('generate-schedule-btn').onclick = function() {
+    const m = parseInt(document.getElementById('plan-month').value), y = parseInt(document.getElementById('plan-year').value);
+    const days = new Date(y, m + 1, 0).getDate();
+    
+    let queue = JSON.parse(JSON.stringify(globalProductionQueue.filter(i => i.units > 0)));
+    
+    // --- LOGIC: Cut off first 196 units ---
+    let startOffset = 196;
+    while (startOffset > 0 && queue.length > 0) {
+        if (queue[0].units > startOffset) {
+            queue[0].units -= startOffset;
+            startOffset = 0;
+        } else {
+            startOffset -= queue[0].units;
+            queue.shift();
+        }
+    }
+    
+    let current = queue.shift();
+    arrowConnections = [];
+
+    for (let d = 1; d <= days; d++) {
+      ['day', 'night'].forEach(shift => {
+        let cap = (shift === 'day') ? currentCapacityData[d].dayCap : currentCapacityData[d].nightCap;
+        const row = document.querySelector(`tr[data-day-number="${d}"][data-shift="${shift}"]`);
+        // Use class selector to get only the 18 variant cells
+        const cells = row.querySelectorAll('.data-cell');
+        cells.forEach(cell => cell.textContent = '');
+        let lastFilled = null;
+        
+        while (cap > 0 && current) {
+          const take = Math.min(cap, current.units);
+          // Use index directly (0 maps to first data-cell)
+          const targetCell = cells[current.idx]; 
+          
+          if (lastFilled && lastFilled !== targetCell) { arrowConnections.push({ from: lastFilled, to: targetCell }); }
+          
+          targetCell.textContent = parseInt(targetCell.textContent||0) + take;
+          lastFilled = targetCell;
+          
+          cap -= take; current.units -= take;
+          if (current.units <= 0) current = queue.shift();
+        }
+      });
+    }
+    
+    drawArrowOverlay();
+    alert("Schedule Generated!");
+  };
+  
+  window.addEventListener('resize', drawArrowOverlay);
+  initializeMonthData(10, 2025); generateTable(10, 2025);
+</script>
+</body>
+</html>
