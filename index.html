@@ -1,7 +1,113 @@
-function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  if (data.action === "savePlan") {
-    // Write data.capacity and data.sequence to your sheets
-    return ContentService.createTextOutput("Success");
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WE-OD Dashboard</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; background: #fff; color: #333; }
+  h2 { text-align:center; font-size: 60px; margin-top:0; letter-spacing:5px; color:#000; }
+  .table-container { position: relative; margin-bottom: 50px; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  th, td { border:1px solid #ccc; padding:5px; text-align:center; font-size:10px; height:25px; font-weight:bold; }
+  th { background:#f8f8f8; }
+  .data-cell { background:#fff; color:#333; font-weight:bold; }
+  tr.non-production-row td { background:#eef4ff; color:#8899aa; }
+  #arrow-overlay { position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:10; }
+  .connection-path { stroke:rgba(220,53,69,0.6); stroke-width:2; fill:none; }
+  #edit-toggle-btn { display:block; margin:-10px auto 20px auto; padding:8px 16px; font-weight:bold; color:#fff; background:#007bff; border:none; border-radius:5px; cursor:pointer; }
+  #edit-toggle-btn.locked { background:#dc3545; }
+  #password-prompt { display:none; margin:20px auto; padding:15px; width:300px; text-align:center; border:1px solid #ccc; background:#f0f0f0; }
+  #editing-panel-container { display:none; margin-top:30px; }
+</style>
+</head>
+<body>
+
+<h2>WE-OD</h2>
+<hr>
+<button id="edit-toggle-btn">Unlock Editing</button>
+
+<div id="password-prompt">
+  <label>Enter Edit Password:</label>
+  <input type="password" id="password-input" placeholder="Password...">
+  <div id="password-error" style="color:red; margin-top:5px;"></div>
+</div>
+
+<div class="table-container">
+  <svg id="arrow-overlay">
+    <defs>
+      <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+        <polygon points="0 0, 6 3, 0 6" fill="rgba(220, 53, 69, 0.6)" />
+      </marker>
+    </defs>
+  </svg>
+  <table>
+    <thead>
+      <tr>
+        <th>Month</th>
+        <th>Day</th>
+        <th>Daily Target</th>
+        <th>OT</th>
+        <th>Plan D/N</th>
+        <th>Shift</th>
+        <th colspan="18">Variants</th>
+      </tr>
+    </thead>
+    <tbody id="production-schedule-body"></tbody>
+  </table>
+</div>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbySCaYNySVZFB4GcPgcXGAQiaWRsqE_Esj93keeqzuvd7BbnojTkkl87r_xtCanf4c7uQ/exec';
+const correctPassword = "AM3000";
+
+let isEditMode = false;
+let currentCapacityData = {};
+let arrowConnections = [];
+
+function initializeMonthData(month, year){
+  currentCapacityData = {};
+  const days = new Date(year, month+1,0).getDate();
+  for(let d=1;d<=days;d++){
+    currentCapacityData[d]={dayCap:99, nightCap:97, total:196, otLabel:"0"};
   }
 }
+
+function generateTable(month, year){
+  const tbody=document.getElementById('production-schedule-body');
+  tbody.innerHTML='';
+  const days=new Date(year, month+1,0).getDate();
+  let rows='';
+  for(let d=1;d<=days;d++){
+    const dayData=currentCapacityData[d];
+    rows+=`<tr>
+      <td>${month+1}</td>
+      <td>${d}</td>
+      <td>${dayData.total}</td>
+      <td>${dayData.otLabel}</td>
+      <td>${dayData.dayCap}/${dayData.nightCap}</td>
+      <td>D</td>
+      ${'<td class="data-cell"></td>'.repeat(18)}
+    </tr>`;
+  }
+  tbody.innerHTML=rows;
+}
+
+document.getElementById('edit-toggle-btn').addEventListener('click',()=>{
+  if(isEditMode){ isEditMode=false; document.getElementById('edit-toggle-btn').textContent='Unlock Editing'; }
+  else{ document.getElementById('password-prompt').style.display='block'; document.getElementById('password-input').focus(); }
+});
+
+document.getElementById('password-input').addEventListener('keypress',function(e){
+  if(e.key==='Enter'){
+    if(this.value===correctPassword){ isEditMode=true; document.getElementById('edit-toggle-btn').textContent='Lock Dashboard'; document.getElementById('password-prompt').style.display='none'; this.value=''; }
+    else{ document.getElementById('password-error').textContent='Wrong Password'; }
+  }
+});
+
+initializeMonthData(10,2025);
+generateTable(10,2025);
+</script>
+
+</body>
+</html>
